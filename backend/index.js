@@ -19,7 +19,7 @@ import Tarallo from './tarallo.js';
 import FileManager from './fileManager.js';
 
 export const diskManager = new DiskManager({
-	refreshInterval: config.diskRefeshInterval,
+	refreshInterval: config.diskRefeshInterval || 10000,
 	filter: config.ignore,
 });
 
