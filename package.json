@@ -1,0 +1,25 @@
+{
+	"name": "pesto-web",
+	"version": "1.0.0",
+	"description": "Erase and burn OS on disks from the confort of your phone",
+	"devDependencies": {
+		"concurrently": "^8.0.1"
+	},
+	"workspaces": [
+		"frontend",
+		"backend"
+	],
+	"author": "WEEEOpen",
+	"license": "MIT",
+	"scripts": {
+	  "frontend:dev": "cd frontend && npm run dev",
+	  "frontend:prod": "cd frontend && npm run build",
+	  "backend:dev": "cd backend && npm run dev",
+	  "backend:prod": "cd backend && npm run prod",
+	  "dev": "concurrently \"npm run backend:dev\" \"npm run frontend:dev\"",
+	  "prod": "npm run frontend:prod && npm run backend:prod",
+	  "docker:up": "docker-compose up -d",
+	  "docker:down": "docker-compose down",
+	  "docker:rebuild": "docker-compose down && docker-compose build --no-cache && docker-compose up -d"
+	}
+}

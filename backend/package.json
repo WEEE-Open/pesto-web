@@ -1,0 +1,22 @@
+{
+	"scripts": {
+		"dev": "nodemon --trace-warnings index.js",
+		"prod": "node index.js --prod"
+	},
+	"type": "module",
+	"devDependencies": {
+		"nodemon": "^2.0.19"
+	},
+	"nodemonConfig": {
+		"ignore": [
+			"images/*"
+		]
+	},
+	"dependencies": {
+		"express": "^4.18.2",
+		"express-sse": "^0.5.3",
+		"node-fetch": "^3.3.1",
+		"uuid": "^9.0.0",
+		"yargs": "^17.7.2"
+	}
+}
