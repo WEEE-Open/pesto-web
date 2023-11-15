@@ -3,9 +3,9 @@ import config from "./config.js";
 import express from "express";
 import { tarallo } from "./index.js";
 import sseRouter from "./routes/sse.router.js";
-import diskRouter from "./routes/disk.router.js";
-import taskRouter from "./routes/task.router.js";
-import fileRouter from "./routes/file.router.js";
+import disksRouter from "./routes/disks.router.js";
+import tasksRouter from "./routes/tasks.router.js";
+import filesRouter from "./routes/files.router.js";
 
 let router = express.Router();
 router.use(express.json());
@@ -25,17 +25,17 @@ router.use("/", sseRouter);
 /**
  * Disk routes
  */
-router.use("/", diskRouter);
+router.use("/disks", disksRouter);
 
 /**
  * Task routes
  */
-router.use("/tasks", taskRouter);
+router.use("/tasks", tasksRouter);
 
 /**
  * File routes
  */
-router.use("/files:path(*)", fileRouter);
+router.use("/files:path(*)", filesRouter);
 
 /**
  * Tarallo get features json
