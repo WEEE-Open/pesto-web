@@ -1,8 +1,9 @@
 import SSE from "express-sse";
+import { diskManager, tasksManager, tarallo } from "./index.js";
 
 const sse = new SSE({ disks: [], tasks: [], tarallo: { available: false } });
 
-export function init() {
+function init() {
   // TODO: actually a decent method that build the complete object and compares changes, this is very hacky
   function sendUpdatedDiskList() {
     let disksList = diskManager.listDisks();

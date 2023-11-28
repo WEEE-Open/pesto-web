@@ -1,5 +1,5 @@
 import express from "express";
-import { diskManager } from "../index";
+import { diskManager } from "../index.js";
 
 const disksRouter = express.Router({ mergeParams: true });
 

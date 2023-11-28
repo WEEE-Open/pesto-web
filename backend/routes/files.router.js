@@ -1,5 +1,5 @@
 import express from "express";
-import { fileManager } from "../index";
+import { fileManager } from "../index.js";
 
 const filesRouter = express.Router({ mergeParams: true });
 

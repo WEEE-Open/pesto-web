@@ -63,9 +63,15 @@ export default class DiskManager extends EventEmitter {
 					console.log(`smartctl scan didn't output valid json: ${buffer} ,code ${code}`);
 					return;
 				}
+
+				// copy disks into this set
 				let existingDisks = new Set(this.disks.map(d => d.name));
 				let listUpdated = false;
-				disksInfo.devices.forEach(disk => {
+				
+				// for each disk seen by smartctl:
+				// if not in the existing disks list, add it to this.disks
+				// delete it from existing disks list
+				disksInfo.devices?.forEach(disk => {
 					if (!existingDisks.has(disk.name) && !this.opt.filter.has(disk.name)) {
 						let newDisk = new Disk(disk.name);
 						this.disks.push(newDisk);
@@ -76,18 +82,24 @@ export default class DiskManager extends EventEmitter {
 							this.emit('disksListUpdated', this.listDisks());
 						});
 						this.emit('diskAdded', newDisk);
-						listUpdated = true;
+						listUpdated = true; // something in the list has been updated
 					}
-					existingDisks.delete(disk.name);
+					existingDisks.delete(disk.name); // delete the disk scanned by smartctl from existing disks list
 				});
+
+				// now existing disks contains only old disks (not seen by smartctl anymore)
 				existingDisks.forEach(disk => {
+					// find the corresponding index of the disk in the disks list
 					let i = this.disks.findIndex(d => d.name === disk);
+					// extract the corresponding disk from disks list and remove all listeners from it
 					let [old] = this.disks.splice(i, 1);
 					old.removeAllListeners();
 					this.emit('diskRemoved', old);
 					listUpdated = true;
 				});
+				
 				this.refreshingList = false;
+				console.log(this.listDisks());
 				if (listUpdated) this.emit('disksListUpdated', this.listDisks());
 				this.emit('disksListUpdateFinish', this.listDisks());
 				resolve(this.listDisks());

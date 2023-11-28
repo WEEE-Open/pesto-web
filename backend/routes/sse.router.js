@@ -1,8 +1,8 @@
 import express from "express";
-import { sse } from "../sse";
+import { init } from "../sse.js";
 
 const sseRouter = express.Router();
 
-sseRouter.get("/stream", sse.init);
+sseRouter.get("/stream", init);
 
 export default sseRouter;

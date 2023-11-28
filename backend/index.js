@@ -12,7 +12,8 @@ const argv = yargs(process.argv)
   .help()
   .alias('help', 'h').argv;
 
-import api, { init } from './api.js';
+import api from './api.js';
+import { init } from './sse.js';
 import DiskManager from './diskManager.js';
 import TasksManager from './tasksManager.js';
 import Tarallo from './tarallo.js';

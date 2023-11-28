@@ -1,5 +1,5 @@
 import express from "express";
-import { tasksManager } from "../index";
+import { tasksManager } from "../index.js";
 
 const tasksRouter = express.Router({ mergeParams: true });
 
