@@ -177,7 +177,7 @@ class Disk extends EventEmitter {
 						this.smartData = newSmartData;
 						this.isLoadingSmartData = false;
 						this.size = prettyPrintBytes(this.smartData.user_capacity.bytes/1024);
-						this.parsedSmartCtlData = await this.parseSmartCtlData().catch(()=>{});
+						this.parsedSmartCtlData = await this.parseSmartCtlData().catch(console.log);
 						this.emit('smartData', this.smartData);
 						resolve(this.smartData);
 					}
@@ -205,6 +205,7 @@ class Disk extends EventEmitter {
 			if (this.smartData === null)
 				throw Error("Disk has no smartData");
 		}
+		console.log('here');
 		let port = undefined;
 		let features = {
 			type: "hdd",
@@ -272,12 +273,12 @@ class Disk extends EventEmitter {
 				if (!isHDD) {
 					features['type'] = 'ssd';
 				}
-			}).catch((e) => {console.log(e.toString())});//.catch(() => {});
+			}).catch(() => {});
 		}
 
 		if (features.model !== undefined) {
 			if (features.model.includes(" SSD") || features.model.includes("SSD ")) {
-				features.model = features.model.replace(" SSD", "").replace("SSD ", "").replace("  ", " ").strip();
+				features.model = features.model.replace(" SSD", "").replace("SSD ", "").replace("  ", " ").trim();
 				if (features.model == "") delete features.model;
 				features.type = "ssd";
 			} else if (features.model.startsWith("HGST ")) {
@@ -288,15 +289,15 @@ class Disk extends EventEmitter {
 
 		if (features.family !== undefined) {
 			if (features.family.includes("(SATA)"))
-				features.family = features.family.replace("(SATA)", "").strip();
+				features.family = features.family.replace("(SATA)", "").trim();
 			else if (features.family.includes("(ATA/133 and SATA/150)"))
-				features.family = features.family.replace("(ATA/133 and SATA/150)", "").strip();
+				features.family = features.family.replace("(ATA/133 and SATA/150)", "").trim();
 			else if (features.family.includes("SSD")) {
 				features.type = "ssd";
 				if (["basedssds", "basedssd"].has(features.family.replace(" ", "").lower()))
 					delete features.family;
 			} else if (features.family.includes("Serial ATA")) {
-				features.family = features.family.replace("Serial ATA", "").strip();
+				features.family = features.family.replace("Serial ATA", "").trim();
 				if (port === undefined)
 					port = "sata-ports-n"
 			}
@@ -335,7 +336,7 @@ class Disk extends EventEmitter {
 
 	// https://unix.stackexchange.com/questions/65595/how-to-know-if-a-disk-is-an-ssd-or-an-hdd
 	async checkIfHDD() {
-		return (await fs.readFile(`/sys/block/${this.nameShort}/queue/rotational`)).toString().trim() == "1";
+		return (await fs.readFile(`/sys/block/${this.nameShort}/queue/rotational`).catch(()=>0)).toString().trim() == "1";
 	}
 
 	format() {
