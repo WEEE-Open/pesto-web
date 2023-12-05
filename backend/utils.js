@@ -105,3 +105,96 @@ export function extract_smart_data(features) {
 
 	return { smart_data, failing_now };
 }
+
+/**
+ *  Get disk status from smartctl output.
+ *  This algorithm has been mined: it's based on a decision tree with "accuracy" criterion since seems to produce
+ *  slightly better results than the others. And the tree is somewhat shallow, which makes the algorithm more
+ *  human-readable. There's no much theory other than that, so there's no real theory here.
+ *  The data is about 200 smartctl outputs for every kind of hard disk, manually labeled with pestello (and mortaio)
+ *  according to how I would classify them or how they are acting: if an HDD is making horrible noises and cannot
+ *  perform a single read without throwing I/O errors, it's failed, no matter what the smart data says.
+ *  Initially I tried to mix SSDs in, but their attributes are way different and they are also way easier to
+ *  classify, so this algorithm works on mechanical HDDs only.
+ *  This is the raw tree as output by RapidMiner:
+ *  Current_Pending_Sector > 0.500
+ *  |   Load_Cycle_Count = ?: FAIL {FAIL=9, SUS=0, OK=1, OLD=0}
+ *  |   Load_Cycle_Count > 522030: SUS {FAIL=0, SUS=3, OK=0, OLD=0}
+ *  |   Load_Cycle_Count ≤ 522030: FAIL {FAIL=24, SUS=0, OK=1, OLD=0}
+ *  Current_Pending_Sector ≤ 0.500
+ *  |   Reallocated_Sector_Ct = ?: OK {FAIL=1, SUS=0, OK=4, OLD=0}
+ *  |   Reallocated_Sector_Ct > 0.500
+ *  |   |   Reallocated_Sector_Ct > 3: FAIL {FAIL=8, SUS=1, OK=0, OLD=0}
+ *  |   |   Reallocated_Sector_Ct ≤ 3: SUS {FAIL=0, SUS=4, OK=0, OLD=0}
+ *  |   Reallocated_Sector_Ct ≤ 0.500
+ *  |   |   Power_On_Hours = ?
+ *  |   |   |   Run_Out_Cancel = ?: OK {FAIL=0, SUS=1, OK=3, OLD=1}
+ *  |   |   |   Run_Out_Cancel > 27: SUS {FAIL=0, SUS=2, OK=0, OLD=0}
+ *  |   |   |   Run_Out_Cancel ≤ 27: OK {FAIL=1, SUS=0, OK=6, OLD=1}
+ *  |   |   Power_On_Hours > 37177.500
+ *  |   |   |   Spin_Up_Time > 1024.500
+ *  |   |   |   |   Power_Cycle_Count > 937.500: SUS {FAIL=0, SUS=1, OK=0, OLD=1}
+ *  |   |   |   |   Power_Cycle_Count ≤ 937.500: OK {FAIL=0, SUS=0, OK=3, OLD=0}
+ *  |   |   |   Spin_Up_Time ≤ 1024.500: OLD {FAIL=0, SUS=0, OK=2, OLD=12}
+ *  |   |   Power_On_Hours ≤ 37177.500
+ *  |   |   |   Start_Stop_Count = ?: OK {FAIL=0, SUS=0, OK=3, OLD=0}
+ *  |   |   |   Start_Stop_Count > 13877: OLD {FAIL=1, SUS=0, OK=0, OLD=2}
+ *  |   |   |   Start_Stop_Count ≤ 13877: OK {FAIL=2, SUS=9, OK=89, OLD=4}
+ *  but some manual adjustments were made, just to be safe.
+ *  Most HDDs are working so the data is somewhat biased, but there are some very obvious red flags like smartctl
+ *  reporting failing attributes (except temperature, which doesn't matter and nobody cares) or having both
+ *  reallocated AND pending sectors, where nobody would keep using that HDD, no matter what the tree decides.
+ *
+ * @param {*} smart_data Smartctl data
+ * @param {Boolean} failing_now If any attribute is marked as failing
+ * @returns {String} HDD status (label)
+ */
+export function smart_health_status(smart_data, failing_now) {
+	if (failing_now)
+    return "fail";
+
+	if (Number(smart_data.Current_Pending_Sector) > 0) {
+		// This part added manually just to be safe
+		if (Number(smart_data.Reallocated_Sector_Ct) > 3)
+			return "fail";
+
+		// I wonder if this part is overfitted... who cares, anyway.
+		const cycles = smart_data.Load_Cycle_Count;
+		if (cycles)
+			return Number(cycles) > 522030 ? "sus" : "fail";
+
+		return "fail";
+	} else {
+		const reallocated = Number(smart_data.Reallocated_Sector_Ct);
+		if (reallocated > 0) {
+			return reallocated > 3 ? "fail" : "sus";
+		} else {
+			const hours = smart_data.Power_On_Hours;
+
+			if (hours) {
+				// 4.2 years as a server (24/7), 15.2 years in an office pc (8 hours a day, 304 days a year)
+				if (Number(hours) > 37177) {
+					if (Number(smart_data.Spin_Up_Time) <= 1024)
+						return "old";
+
+					/*
+					 * Checking this attribute tells us if it's more likely to be a server HDD or an office HDD
+					 * The tree says 1 old and 1 sus here, but there's too little data to throw around "sus"
+					 * like this... it needs more investigation, though: if the disk is slow at starting up
+					 * it may tell something about its components starting to fail.
+					 */
+					return Number(smart.Power_Cycle_Count) > 937 ? "old" : "ok";
+				} else {
+					/*
+					 * This whole area is not very good, but there are too many "ok" disks and too few not-ok ones
+					 * to mine something better
+					 */
+					return Number(smart_data.Start_Stop_Count) > 13877 ? "old" : "ok";
+				}
+			} else {
+				// This attribute is a good indication that something is suspicious
+				return (Number(smart_data.Run_Out_Cancel) > 27) ? "sus" : "ok";
+			}
+		}
+	}
+}
