@@ -198,3 +198,29 @@ export function smart_health_status(smart_data, failing_now) {
 		}
 	}
 }
+/**
+ * Calculate estimated time to finish the task, based on the current progress percentage
+ * and a list of last progress updates.
+ *
+ * @param {Number} progress - current progress value (0-100)
+ * @param {*} lastProgresses - queue of last progress updates with timestamp and progress percentage
+ * @returns {Number} Estimated remaining time for the task
+ */
+export function calcRemainingTime(progress, lastProgresses) {
+	let sum = 0;
+	for (let i = 0; i < lastProgresses.length - 1; i++) {
+		const timeDiff =
+			lastProgresses[i + 1].time - lastProgresses[i].time;
+		const progressDiff =
+			lastProgresses[i + 1].percentage -
+			lastProgresses[i].percentage;
+		const speed = progressDiff / timeDiff;
+		sum += speed;
+	}
+
+	const averageSpeed = sum / (lastProgresses.length - 1);
+	const remainingProgress = 100 - progress;
+	const remainingTime = remainingProgress / averageSpeed;
+
+	return remainingTime;
+}

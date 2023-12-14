@@ -1,6 +1,7 @@
 import { EventEmitter } from "events";
 import { v4 as uuid } from "uuid";
 import { spawn } from "child_process";
+import { calcRemainingTime } from "./utils";
 
 export default class TasksManager extends EventEmitter {
   constructor() {
@@ -65,14 +66,14 @@ export default class TasksManager extends EventEmitter {
 }
 
 class Task extends EventEmitter {
-  constructor(name, disk, list) {
+  constructor(name, disk, steps) {
     super();
     this.name = name;
     this.disk = disk;
     this.uuid = uuid();
-    this.list = list; // list of steps (or sub-tasks) of this task
+    this.steps = steps; // list of steps (or sub-tasks) of this task
     this.progress = 0;
-    this.step = -1;
+    this.currentStep = -1;
     this.completed = false;
     this.eta = undefined;
     this.startTime = Date.now();
@@ -83,7 +84,7 @@ class Task extends EventEmitter {
   }
 
   get totalSteps() {
-    return this.list.length;
+    return this.steps.length;
   }
 
   /**
@@ -111,21 +112,7 @@ class Task extends EventEmitter {
       this.lastProgressUpdates.shift();
     }
 
-    let sum = 0;
-    for (let i = 0; i < this.lastProgressUpdates.length - 1; i++) {
-      let timeDiff =
-        this.lastProgressUpdates[i + 1].time - this.lastProgressUpdates[i].time;
-      let progressDiff =
-        this.lastProgressUpdates[i + 1].percentage -
-        this.lastProgressUpdates[i].percentage;
-      let speed = progressDiff / timeDiff;
-      sum += speed;
-    }
-
-    let averageSpeed = sum / (this.lastProgressUpdates.length - 1);
-    let remainingProgress = 100 - this.progress;
-    let remainingTime = remainingProgress / averageSpeed;
-    this.eta = remainingTime;
+    this.eta = calcRemainingTime(this.progress, this.lastProgressUpdates);
     this.emit("progressUpdate", this);
   }
 
@@ -136,8 +123,8 @@ class Task extends EventEmitter {
   }
 
   done() {
-    this.step++;
-    if (this.step === this.list.length) {
+    this.currentStep++;
+    if (this.currentStep === this.steps.length) {
       this.disk.busy = false;
       this.emit("done", this);
       return;
@@ -145,12 +132,12 @@ class Task extends EventEmitter {
     this.progress = 0;
     this.lastProgressUpdates = [];
     this.emit("nextStep", this);
-    switch (this.list[this.step].program) {
+    switch (this.steps[this.currentStep].program) {
       case "badblocks":
-        this.badblocks(this.list[this.step].options);
+        this.badblocks(this.steps[this.currentStep].options);
         break;
       default:
-        error(`Can't find program ${this.list[this.step].program}`);
+        error(`Can't find program ${this.steps[this.currentStep].program}`);
     }
   }
 
@@ -158,7 +145,7 @@ class Task extends EventEmitter {
     return {
       name: this.name,
       progress: this.progress,
-      step: this.step,
+      step: this.currentStep,
       totalSteps: this.totalSteps,
       completed: this.completed,
       eta: this.eta,
