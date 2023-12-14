@@ -3,6 +3,15 @@ import config from './config.js';
 import express from 'express';
 import yargs from 'yargs';
 
+/* check if backend is executed with root permissions or not */
+if (process.env.SUDO_UID === undefined) {
+  console.error("******************************");
+  console.error("RUN WITH ROOT PRIVILEGES");
+  console.error("Please run the backend server with root permissions to correctly run smartctl commands");
+  console.error("******************************");
+  process.exit(1);
+}
+
 const argv = yargs(process.argv)
   .option('prod', {
     alias: 'p',
