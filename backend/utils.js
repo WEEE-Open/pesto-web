@@ -66,7 +66,7 @@ function normalize_power_on_time(power_on_time) {
 	if (power_on_time?.hours)
 		return power_on_time.hours;
 	if (power_on_time?.minutes)
-		return power_on_time.minutes / 60;
+		return power_on_time.minutes / 60; // original version: minutes * 60
 	return undefined;
 }
 

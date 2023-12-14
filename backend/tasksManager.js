@@ -62,8 +62,8 @@ class Task extends EventEmitter {
 		super();
 		this.name = name;
 		this.disk = disk;
-		this.uuid = "woop";//uuid();
-		this.list = list;
+		this.uuid = "woop";//uuid(); // TODO: change this to uuid() when ready
+		this.list = list; // list of steps (or sub-tasks) of this task
 		this.progress = 0;
 		this.step = -1;
 		this.completed = false;
@@ -86,19 +86,24 @@ class Task extends EventEmitter {
 	 */
 	updateProgress(percentage, eta) {
 		if (percentage <= this.progress) {
-			if (eta !== undefined)
-				this.eta = eta;
+			// update only the eta value in this case
+			this.eta = eta ?? this.eta;
 			return;
 		}
+
 		if (percentage > 100) percentage = 100; // IDK how you managed that, but GG
+		
 		this.progress = percentage;
 		this.lastProgressUpdates.push({
 			time: Date.now(),
 			percentage
 		});
+
+		// limit the number of last progress to 6 to compute the average speed
 		if (this.lastProgressUpdates.length > 6) {
 			this.lastProgressUpdates.shift();
 		}
+
 		let sum = 0;
 		for (let i = 0; i < this.lastProgressUpdates.length - 1; i++) {
 			let timeDiff = this.lastProgressUpdates[i + 1].time - this.lastProgressUpdates[i].time;
@@ -106,6 +111,7 @@ class Task extends EventEmitter {
 			let speed = progressDiff / timeDiff;
 			sum += speed;
 		}
+
 		let averageSpeed = sum / (this.lastProgressUpdates.length - 1);
 		let remainingProgress = 100 - this.progress;
 		let remainingTime = remainingProgress / averageSpeed;
