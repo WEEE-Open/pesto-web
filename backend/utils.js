@@ -96,7 +96,7 @@ export function extract_smart_data(features) {
 			value = normalize_power_on_time(features.power_on_time) || value;
 		}
 
-		smart_data.name = value;
+		smart_data[name] = value;
 
 		// Find out if anything is failing (update the value only if not already true)
 		failing_now = failing_now ||

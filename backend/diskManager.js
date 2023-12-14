@@ -2,7 +2,7 @@ import { EventEmitter } from "events";
 import { spawn } from 'child_process';
 import fs from 'fs/promises';
 
-import { prettyPrintBytes, splitBrandAndOther } from "./utils.js";
+import { extract_smart_data, prettyPrintBytes, smart_health_status, splitBrandAndOther } from "./utils.js";
 
 import { tarallo, tasksManager } from "./index.js";
 
@@ -10,7 +10,7 @@ export default class DiskManager extends EventEmitter {
 	/**
 	 * @param {object} opt
 	 * @param {number} opt.refreshInterval
-	 * @param {array} opt.filter a list of disks to be ignored 
+	 * @param {array} opt.filter a list of disks to be ignored
 	 */
 	constructor(opt) {
 		super();
@@ -50,11 +50,11 @@ export default class DiskManager extends EventEmitter {
 			smartctl.stdout.on('data', (data) => {
 				buffer += data;
 			});
-		
+
 			smartctl.stderr.on('data', (data) => {
 				console.error(`smartctl scan error: ${data}`);
 			});
-		
+
 			smartctl.on('close', (code) => {
 				let disksInfo;
 				try {
@@ -67,7 +67,7 @@ export default class DiskManager extends EventEmitter {
 				// copy disks into this set
 				let existingDisks = new Set(this.disks.map(d => d.name));
 				let listUpdated = false;
-				
+
 				// for each disk seen by smartctl:
 				// if not in the existing disks list, add it to this.disks
 				// delete it from existing disks list
@@ -97,7 +97,7 @@ export default class DiskManager extends EventEmitter {
 					this.emit('diskRemoved', old);
 					listUpdated = true;
 				});
-				
+
 				this.refreshingList = false;
 				console.log(this.listDisks());
 				if (listUpdated) this.emit('disksListUpdated', this.listDisks());
@@ -156,15 +156,15 @@ class Disk extends EventEmitter {
 			]);
 
 			let buffer = "";
-	
+
 			smartctl.stdout.on('data', (data) => {
 				buffer += data;
 			});
-		
+
 			smartctl.stderr.on('data', (data) => {
 				console.error(`smartctl error: ${data}`);
 			});
-		
+
 			smartctl.on('close', async (code) => {
 				try {
 					if (/*code !== 0*/ false) { // temporarly disabled because it might give some other code but still be a good result, need to find more info
@@ -231,16 +231,16 @@ class Disk extends EventEmitter {
 
 		if (this.smartData.serial_number !== undefined)
 			features.sn = this.smartData.serial_number;
-		
+
 		if (this.smartData.brand === "WDC")
 			features.brand = "Western Digital";
 			if (this.smartData.serial_number !== undefined && this.smartData.serial_number.startsWith("WD-"))
 				features.sn = this.smartData.serial_number.slice(3);
 
-		
+
 		if (this.smartData.wwn !== undefined)
 			features.wwn = (this.smartData.wwn.naa || "") + (this.smartData.wwn.oui || "") + (this.smartData.wwn.id || "");
-		
+
 		switch (this.smartData.form_factor?.name) {
 			case '3.5 inches':
 				features["hdd-form-factor"] = "3.5";
@@ -264,7 +264,7 @@ class Disk extends EventEmitter {
 		if (this.smartData.user_capacity?.bytes !== undefined) {
 			const round_digits = Math.floor(Math.log10(Math.abs(parseFloat(this.smartData.user_capacity.bytes)))) - 2;
 			features["capacity-decibyte"] = Math.round(parseFloat(this.smartData.user_capacity.bytes) / Math.pow(10, round_digits)) * Math.pow(10, round_digits);
-		} 
+		}
 
 		if (this.smartData.rotation_rate !== undefined && this.smartData.rotation_rate > 0) {
 			features["spin-rate-rpm"] = this.smartData.rotation_rate;
@@ -322,6 +322,16 @@ class Disk extends EventEmitter {
 
 		if (port !== undefined) {
 			features[port] = 1;
+		}
+
+		const { smart_data, failing_now } = extract_smart_data(this.smartData);
+
+		const status = smart_health_status(smart_data, failing_now);
+		if (status) {
+      if (!(smart_data.length < 2 && status === "ok"))
+				features["smart-data"] = status;
+		} else {
+      throw Error("Failed to determine HDD health status from SMART data!");
 		}
 
 		return features;
