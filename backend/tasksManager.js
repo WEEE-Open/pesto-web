@@ -1,209 +1,218 @@
 import { EventEmitter } from "events";
-import { v5 as uuid } from "uuid";
-import { spawn } from 'child_process';
-
+import { v4 as uuid } from "uuid";
+import { spawn } from "child_process";
 
 export default class TasksManager extends EventEmitter {
-	constructor() {
-		super();
-		this.tasks = [];
-	}
+  constructor() {
+    super();
+    this.tasks = [];
+  }
 
-	startTask(name, disk, steps) {
-		let newTask = new Task(name, disk, steps);
-		newTask.on('progressUpdate', () => {
-			this.emit('taskProgressUpdate', newTask);
-		});
-		newTask.on('error', (err) => {
-			this.emit('taskError', err, newTask);
-		});
-		newTask.on('nextStep', () => {
-			this.emit('taskNextStep', newTask);
-		});
-		newTask.on('done', () => {
-			this.emit('taskCompleted', newTask);
-		});
-		this.emit('newTask', newTask);
-		this.emit('taskListUpdated', this.listTasks());
-		return this.tasks.push(newTask);
-	}
+  startTask(name, disk, steps) {
+    const newTask = new Task(name, disk, steps);
 
-	clearTasks() {
-		this.tasks = this.tasks.filter(t => {
-			if (t.completed) {
-				t.removeAllListeners();
-				return false;
-			}
-			return true;
-		});
-		this.emit('taskListUpdated', this.listTasks());
-	}
+    newTask.on("progressUpdate", () => {
+      this.emit("taskProgressUpdate", newTask);
+    });
 
-	getTaskIndex(task) {
-		if (task instanceof Task) {
-			task = task.uuid;
-		}
-		return this.tasks.findIndex(t => t.uuid == task);
-	}
+    newTask.on("error", (err) => {
+      this.emit("taskError", err, newTask);
+    });
 
-	getTask(task) {
-		let index = this.getTaskIndex(task);
-		if (index === -1) return;
-		return this.tasks[index];
-	}
+    newTask.on("nextStep", () => {
+      this.emit("taskNextStep", newTask);
+    });
 
-	listTasks() {
-		return this.tasks;
-	}
+    newTask.on("done", () => {
+      this.emit("taskCompleted", newTask);
+    });
+
+    this.emit("newTask", newTask);
+    this.emit("taskListUpdated", this.listTasks());
+
+    return this.tasks.push(newTask);
+  }
+
+  clearTasks() {
+    this.tasks = this.tasks.filter((t) => {
+      if (t.completed) {
+        t.removeAllListeners();
+        return false;
+      }
+      return true;
+    });
+
+    this.emit("taskListUpdated", this.listTasks());
+  }
+
+  getTaskIndex(task) {
+    if (!(task instanceof Task)) {
+      console.error("ERROR: trying to get task index of a non Task object");
+      return -1;
+    }
+
+    return this.tasks.findIndex((t) => t.uuid === task.uuid);
+  }
+
+  getTask(task) {
+    let index = this.getTaskIndex(task);
+    return index > 0 ? this.tasks[index] : undefined;
+  }
+
+  listTasks() {
+    return this.tasks;
+  }
 }
 
 class Task extends EventEmitter {
-	constructor(name, disk, list) {
-		super();
-		this.name = name;
-		this.disk = disk;
-		this.uuid = "woop";//uuid(); // TODO: change this to uuid() when ready
-		this.list = list; // list of steps (or sub-tasks) of this task
-		this.progress = 0;
-		this.step = -1;
-		this.completed = false;
-		this.eta = undefined;
-		this.startTime = Date.now();
-		this.lastProgressUpdates = [];
+  constructor(name, disk, list) {
+    super();
+    this.name = name;
+    this.disk = disk;
+    this.uuid = uuid();
+    this.list = list; // list of steps (or sub-tasks) of this task
+    this.progress = 0;
+    this.step = -1;
+    this.completed = false;
+    this.eta = undefined;
+    this.startTime = Date.now();
+    this.lastProgressUpdates = [];
 
-		this.disk.busy = true;
-		this.done();
-	}
+    this.disk.busy = true;
+    this.done();
+  }
 
-	get totalSteps() {
-		return this.list.length;
-	}
+  get totalSteps() {
+    return this.list.length;
+  }
 
-	/**
-	 * 
-	 * @param {number} percentage from 0 to 100 
-	 * @param {number} [eta] number in seconds till completion (optional)
-	 */
-	updateProgress(percentage, eta) {
-		if (percentage <= this.progress) {
-			// update only the eta value in this case
-			this.eta = eta ?? this.eta;
-			return;
-		}
+  /**
+   *
+   * @param {number} percentage from 0 to 100
+   * @param {number} [eta] number in seconds till completion (optional)
+   */
+  updateProgress(percentage, eta) {
+    if (percentage <= this.progress) {
+      // update only the eta value in this case
+      this.eta = eta ?? this.eta;
+      return;
+    }
 
-		if (percentage > 100) percentage = 100; // IDK how you managed that, but GG
-		
-		this.progress = percentage;
-		this.lastProgressUpdates.push({
-			time: Date.now(),
-			percentage
-		});
+    if (percentage > 100) percentage = 100; // IDK how you managed that, but GG
 
-		// limit the number of last progress to 6 to compute the average speed
-		if (this.lastProgressUpdates.length > 6) {
-			this.lastProgressUpdates.shift();
-		}
+    this.progress = percentage;
+    this.lastProgressUpdates.push({
+      time: Date.now(),
+      percentage,
+    });
 
-		let sum = 0;
-		for (let i = 0; i < this.lastProgressUpdates.length - 1; i++) {
-			let timeDiff = this.lastProgressUpdates[i + 1].time - this.lastProgressUpdates[i].time;
-			let progressDiff = this.lastProgressUpdates[i + 1].percentage - this.lastProgressUpdates[i].percentage;
-			let speed = progressDiff / timeDiff;
-			sum += speed;
-		}
+    // limit the number of last progress to 6 to compute the average speed
+    if (this.lastProgressUpdates.length > 6) {
+      this.lastProgressUpdates.shift();
+    }
 
-		let averageSpeed = sum / (this.lastProgressUpdates.length - 1);
-		let remainingProgress = 100 - this.progress;
-		let remainingTime = remainingProgress / averageSpeed;
-		this.eta = remainingTime;
-		this.emit('progressUpdate', this);
-	}
+    let sum = 0;
+    for (let i = 0; i < this.lastProgressUpdates.length - 1; i++) {
+      let timeDiff =
+        this.lastProgressUpdates[i + 1].time - this.lastProgressUpdates[i].time;
+      let progressDiff =
+        this.lastProgressUpdates[i + 1].percentage -
+        this.lastProgressUpdates[i].percentage;
+      let speed = progressDiff / timeDiff;
+      sum += speed;
+    }
 
-	error(err) {
-		console.log(`TaskManager: error! ${err}`);
-		this.emit('error', err);
-		this.completed = false;
-	}
+    let averageSpeed = sum / (this.lastProgressUpdates.length - 1);
+    let remainingProgress = 100 - this.progress;
+    let remainingTime = remainingProgress / averageSpeed;
+    this.eta = remainingTime;
+    this.emit("progressUpdate", this);
+  }
 
-	done() {
-		this.step++;
-		if (this.step === this.list.length) {
-			this.disk.busy = false;
-			this.emit('done', this);
-			return;
-		}
-		this.progress = 0;
-		this.lastProgressUpdates = [];
-		this.emit('nextStep', this);
-		switch (this.list[this.step].program) {
-			case 'badblocks':
-				this.badblocks(this.list[this.step].options);
-				break;
-			default:
-				error(`Can't find program ${this.list[this.step].program}`);
-		}
-	}
+  error(err) {
+    console.log(`TaskManager: error! ${err}`);
+    this.emit("error", err);
+    this.completed = false;
+  }
 
-	toJSON() {
-		return {
-			name: this.name,
-			progress: this.progress,
-			step: this.step,
-			totalSteps: this.totalSteps,
-			completed: this.completed,
-			eta: this.eta,
-			startTime: this.startTime
-		};
-	}
+  done() {
+    this.step++;
+    if (this.step === this.list.length) {
+      this.disk.busy = false;
+      this.emit("done", this);
+      return;
+    }
+    this.progress = 0;
+    this.lastProgressUpdates = [];
+    this.emit("nextStep", this);
+    switch (this.list[this.step].program) {
+      case "badblocks":
+        this.badblocks(this.list[this.step].options);
+        break;
+      default:
+        error(`Can't find program ${this.list[this.step].program}`);
+    }
+  }
 
-	// All the actual programs
+  toJSON() {
+    return {
+      name: this.name,
+      progress: this.progress,
+      step: this.step,
+      totalSteps: this.totalSteps,
+      completed: this.completed,
+      eta: this.eta,
+      startTime: this.startTime,
+    };
+  }
 
-	badblocks(opt) {
-		let checking = false;
+  // All the actual programs
 
-		console.log(this);
+  badblocks(opt) {
+    let checking = false;
 
-		const badblocks = spawn("badblocks", [
-			"-w",
-			"-s",
-			"-p",
-			"0",
-			"-t",
-			"0x00",
-			"-b",
-			"4096",
-			this.disk.name,
-		]);
+    console.log(this);
 
-		badblocks.stdout.on('data', (data) => {
-			if (!checking && data.includes("Reading and comparing")) checking = true;
-			let match = data.match(/(\d+)%/);
-			if (match.length !== 0) {
-				this.updateProgress(Number(match[1])/2+(50*checking));
-			}
-		});
+    const badblocks = spawn("badblocks", [
+      "-w",
+      "-s",
+      "-p",
+      "0",
+      "-t",
+      "0x00",
+      "-b",
+      "4096",
+      this.disk.name,
+    ]);
 
-		badblocks.stderr.on('data', (data) => {
-			data = String(data);
-			if (!checking && data.includes("Reading and comparing")) checking = true;
-			let match = data.match(/(\d+)%/);
-			if (match.length !== 0) {
-				this.updateProgress(Number(match[1])/2+(50*checking));
-			}
-		});
+    badblocks.stdout.on("data", (data) => {
+      if (!checking && data.includes("Reading and comparing")) checking = true;
+      let match = data.match(/(\d+)%/);
+      if (match.length !== 0) {
+        this.updateProgress(Number(match[1]) / 2 + 50 * checking);
+      }
+    });
 
-	
-		/*badblocks.stderr.on('data', (data) => {
+    badblocks.stderr.on("data", (data) => {
+      data = String(data);
+      if (!checking && data.includes("Reading and comparing")) checking = true;
+      let match = data.match(/(\d+)%/);
+      if (match.length !== 0) {
+        this.updateProgress(Number(match[1]) / 2 + 50 * checking);
+      }
+    });
+
+    /*badblocks.stderr.on('data', (data) => {
 			this.error(`Badblocks error: ${data}`);
 			//badblocks.kill();
 		});*/
-	
-		badblocks.on('close', (code) => {
-			if (code !== 0) {
-				this.error(`Badblocks exited with code ${code}`);
-			} else {
-				this.done();
-			}
-		});
-	}
+
+    badblocks.on("close", (code) => {
+      if (code !== 0) {
+        this.error(`Badblocks exited with code ${code}`);
+      } else {
+        this.done();
+      }
+    });
+  }
 }
