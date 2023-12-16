@@ -2,6 +2,7 @@ import config from './config.js';
 
 import express from 'express';
 import yargs from 'yargs';
+import morgan from "morgan";
 
 /* check if backend is executed with root permissions or not */
 if (process.env.SUDO_UID === undefined) {
@@ -41,6 +42,7 @@ export const fileManager = new FileManager(config.fileRoot);
 
 let app = express();
 app.use(express.json());
+app.use(morgan("dev"));
 
 // this is to fix a deprecated function in the express-sse module, do not removed untill updated
 app.use(function (req, res, next) {
