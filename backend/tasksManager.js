@@ -57,7 +57,7 @@ export default class TasksManager extends EventEmitter {
 
   getTask(task) {
     let index = this.getTaskIndex(task);
-    return index > 0 ? this.tasks[index] : undefined;
+    return index >= 0 ? this.tasks[index] : undefined;
   }
 
   listTasks() {
@@ -108,7 +108,8 @@ class Task extends EventEmitter {
     });
 
     // limit the number of last progress to 6 to compute the average speed
-    if (this.lastProgressUpdates.length > 6) {
+    const MAX_PROGRESS_UPDATES = 6;
+    if (this.lastProgressUpdates.length > MAX_PROGRESS_UPDATES) {
       this.lastProgressUpdates.shift();
     }
 
