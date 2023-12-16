@@ -35,7 +35,7 @@ router.use("/tasks", tasksRouter);
 /**
  * File routes
  */
-router.use("/files:path(*)", filesRouter);
+router.use("/files", filesRouter);
 
 /**
  * Tarallo get features json

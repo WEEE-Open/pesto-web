@@ -1,7 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
 
-
 class FileManager {
 	constructor(root) {
 		if (typeof root !== "string") {
@@ -52,7 +51,7 @@ class FileManager {
 	async listDir(folder) {
 		return fs.readdir(folder);
 	}
-	
+
 	/**
 	 * @description Move or rename a file or folder
 	 */
@@ -116,8 +115,9 @@ class FileManager {
 		}
 	}
 
-	isPathSafe(path) {
-		return path.startsWith(path.normalize(this.root + path.sep));
+	isPathSafe(normalizedPath) {
+		// const normalizedPath = path.normalize(this.root + path.sep + path_);
+		return normalizedPath.startsWith(path.normalize(this.root + path.sep));
 	}
 }
 
