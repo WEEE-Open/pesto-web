@@ -25,11 +25,13 @@ disksRouter.get("/refresh", async (req, res) => {
 /**
  * Middleware to get specific disk info and put it into request object.
  * The request should contain a parameter "name", used as identifier
- * of the disk.
+ * of the disk. This name should actually be only the part after /dev/,
+ * e.g. to do operations on /dev/sda you should call /disks/sda(/...)
+ *
  * If the "name" doesn't represent any disk, then 404 is returned.
  */
 const embedDiskIntoRequest = (req, res, next) => {
-  const disk = diskManager.getDisk(req.params.name);
+  const disk = diskManager.getDisk("/dev/" + req.params.name);
   if (!disk) {
     return res.status(404).json({ error: "Disk not found" });
   }
