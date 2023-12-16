@@ -1,7 +1,7 @@
 import { EventEmitter } from "events";
 import { v4 as uuid } from "uuid";
 import { spawn } from "child_process";
-import { calcRemainingTime } from "./utils";
+import { calcRemainingTime } from "./utils.js";
 
 export default class TasksManager extends EventEmitter {
   constructor() {
