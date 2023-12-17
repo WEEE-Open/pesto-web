@@ -31,7 +31,9 @@ export default class TasksManager extends EventEmitter {
     this.emit("newTask", newTask);
     this.emit("taskListUpdated", this.listTasks());
 
-    return this.tasks.push(newTask);
+    this.tasks.push(newTask);
+
+    return newTask.uuid;
   }
 
   clearTasks() {

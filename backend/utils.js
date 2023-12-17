@@ -24,9 +24,7 @@ export function prettyPrintBytes(bytes) {
 
 
 export function splitBrandAndOther(line) {
-	let lowered = line.toLowerCase();
-
-	let possibilities = [
+	const brands = [
 		"WDC ",
 		"Western Digital",
 		"Seagate",
@@ -44,13 +42,14 @@ export function splitBrandAndOther(line) {
 		"Quantum",
 	];
 
-	let brand = null;
+	const lowered = line.toLowerCase();
+	let brand;
 	let other = line;
-	for (let i = 0; i < possibilities.length; i++) {
-		let possible = possibilities[i];
-		if (lowered.startsWith(possible.toLowerCase())) {
-			brand = possible.trim();
-			other = line.slice(possible.length).trimStart("_").trim();
+
+	for (const b of brands) {
+		if (lowered.startsWith(b.toLowerCase())) {
+			brand = b.trim();
+			other = line.slice(b.length).trimStart("_").trim();
 			break;
 		}
 	}
@@ -63,11 +62,9 @@ export function splitBrandAndOther(line) {
  * (see https://github.com/mirror/smartmontools/blob/44cdd4ce63ca4e07db87ec062a159181be967a72/ataprint.cpp#L1140-L1168)
  */
 function normalize_power_on_time(power_on_time) {
-	if (power_on_time?.hours)
-		return power_on_time.hours;
-	if (power_on_time?.minutes)
-		return power_on_time.minutes / 60; // original version: minutes * 60
-	return undefined;
+	const { hours, minutes } = power_on_time;
+	// return hours or convert mins to hours or return undefined
+	return hours || (minutes && minutes / 60); // original version was * 60 (probably wrong)
 }
 
 /**
@@ -198,6 +195,7 @@ export function smart_health_status(smart_data, failing_now) {
 		}
 	}
 }
+
 /**
  * Calculate estimated time to finish the task, based on the current progress percentage
  * and a list of last progress updates.

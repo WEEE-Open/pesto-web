@@ -82,8 +82,8 @@ disksRouter.get("/:name/tarallo", (req, res) => {
     .then((taralloProperties) => {
       res.json(taralloProperties);
     })
-    .catch((code) => {
-      res.status(404).send();
+    .catch((e) => {
+      res.status(404).send({ error: "Disk not found on Tarallo" });
     });
 });
 
@@ -113,8 +113,8 @@ disksRouter.post("/:name/tarallo", (req, res) => {
     .then((code) => {
       res.send(code);
     })
-    .catch((code) => {
-      res.status(500).send();
+    .catch((e) => {
+      res.status(500).send({ error: "Error while uploading on Tarallo" });
     });
 });
 
@@ -124,15 +124,18 @@ disksRouter.post("/:name/tarallo", (req, res) => {
  * Executes an operation on a specific disk identified by "name".
  */
 disksRouter.get("/:name/executeProcess/:process", (req, res) => {
+  let taskId;
+
   switch (req.params.process) {
     case "format":
-      req.disk.format();
+      taskId = req.disk.format();
       break;
     default:
-      res.status(404).send();
+      res.status(404).send({ error: "Process not found" });
       return;
   }
-  res.status(201).send();
+
+  res.status(201).send({ uuid: taskId });
 });
 
 export default disksRouter;

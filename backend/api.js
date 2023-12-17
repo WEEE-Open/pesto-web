@@ -41,17 +41,15 @@ router.use("/files", filesRouter);
  * Tarallo get features json
  */
 router.get("/tarallo/features.json", (req, res) => {
-  if (tarallo.available === false) {
-    return res.status(503).send();
+  if (!tarallo.available) {
+    return res.status(503).send({ error: "Tarallo not available" });
   }
 
-  if (
-    tarallo.features == undefined ||
-    Object.keys(tarallo.features).length === 0
-  ) {
-    return res.status(404).send();
+  if (!tarallo.features || Object.keys(tarallo.features).length === 0) {
+    return res.status(404).send({ error: "Features not found or empty" });
   }
-  res.json(tarallo.features);
+
+  res.json({ features: tarallo.features });
 });
 
 export default router;
