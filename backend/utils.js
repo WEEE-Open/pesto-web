@@ -61,10 +61,15 @@ export function splitBrandAndOther(line) {
  * Normalize power on time to hours
  * (see https://github.com/mirror/smartmontools/blob/44cdd4ce63ca4e07db87ec062a159181be967a72/ataprint.cpp#L1140-L1168)
  */
-function normalize_power_on_time(power_on_time) {
+export function normalize_power_on_time(power_on_time) {
 	const { hours, minutes } = power_on_time;
 	// return hours or convert mins to hours or return undefined
 	return hours || (minutes && minutes / 60); // original version was * 60 (probably wrong)
+}
+
+export function get_capacity_in_decibyte(bytes) {
+	const round_digits = Math.floor(Math.log10(Math.abs(parseFloat(bytes)))) - 2;
+	return Math.round(parseFloat(bytes) / Math.pow(10, round_digits)) * Math.pow(10, round_digits);
 }
 
 /**

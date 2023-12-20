@@ -2,7 +2,7 @@ import { EventEmitter } from "events";
 import { spawn } from 'child_process';
 import fs from 'fs/promises';
 
-import { extract_smart_data, prettyPrintBytes, smart_health_status, splitBrandAndOther } from "./utils.js";
+import { extract_smart_data, get_capacity_in_decibyte, prettyPrintBytes, smart_health_status, splitBrandAndOther } from "./utils.js";
 
 import { tarallo, tasksManager } from "./index.js";
 
@@ -99,7 +99,7 @@ export default class DiskManager extends EventEmitter {
 				});
 
 				this.refreshingList = false;
-				console.log(this.listDisks());
+				// console.log(this.listDisks());
 				if (listUpdated) this.emit('disksListUpdated', this.listDisks());
 				this.emit('disksListUpdateFinish', this.listDisks());
 				resolve(this.listDisks());
@@ -200,56 +200,50 @@ class Disk extends EventEmitter {
 	}
 
 	async parseSmartCtlData() {
-		if (this.smartData === null) {
+		if (!this.smartData) {
 			await this.recoverSmartData();
-			if (this.smartData === null)
+			if (!this.smartData)
 				throw Error("Disk has no smartData");
 		}
-		console.log('here');
-		let port = undefined;
-		let features = {
+
+		let port;
+		const features = {
 			type: "hdd",
 		};
-		if (this.smartData.vendor !== undefined && this.smartData.product !== undefined) {
+
+		if (this.smartData.vendor && this.smartData.product) {
 			features.brand = this.smartData.vendor;
 			features.model = this.smartData.product;
 		} else {
-			if (this.smartData.model_name !== undefined) {
-				let [brand, model] = splitBrandAndOther(this.smartData.model_name);
+			if (this.smartData.model_name) {
+				const [brand, model] = splitBrandAndOther(this.smartData.model_name);
 				features.model = model;
-				if (features.brand !== undefined && brand)
-					features.brand = brand;
+				features.brand = brand;
 			}
 
-			if (this.smartData.model_family !== undefined) {
-				let [brand, family] = splitBrandAndOther(this.smartData.model_family);
+			if (this.smartData.model_family) {
+				const [brand, family] = splitBrandAndOther(this.smartData.model_family);
 				features.family = family;
-				if (features.brand !== undefined && brand)
-					features.brand = brand;
+				features.brand ??= brand;
 			}
 		}
 
-		if (this.smartData.serial_number !== undefined)
-			features.sn = this.smartData.serial_number;
+		features.sn = this.smartData.serial_number;
 
 		if (this.smartData.brand === "WDC")
 			features.brand = "Western Digital";
-			if (this.smartData.serial_number !== undefined && this.smartData.serial_number.startsWith("WD-"))
-				features.sn = this.smartData.serial_number.slice(3);
 
+		if (this.smartData.serial_number?.startsWith("WD-"))
+			features.sn = this.smartData.serial_number.slice(3);
 
-		if (this.smartData.wwn !== undefined)
+		if (this.smartData.wwn)
 			features.wwn = (this.smartData.wwn.naa || "") + (this.smartData.wwn.oui || "") + (this.smartData.wwn.id || "");
 
 		switch (this.smartData.form_factor?.name) {
 			case '3.5 inches':
-				features["hdd-form-factor"] = "3.5";
-			break;
 			case '2.5 inches':
-				features["hdd-form-factor"] = "2.5";
-			break;
 			case '1.8 inches':
-				features["hdd-form-factor"] = "1.8";
+				features["hdd-form-factor"] = this.smartData.form_factor.name.split(" ")[0];
 			break;
 			case 'M.2':
 				features["hdd-form-factor"] = "m2";
@@ -262,8 +256,7 @@ class Disk extends EventEmitter {
 		}
 
 		if (this.smartData.user_capacity?.bytes !== undefined) {
-			const round_digits = Math.floor(Math.log10(Math.abs(parseFloat(this.smartData.user_capacity.bytes)))) - 2;
-			features["capacity-decibyte"] = Math.round(parseFloat(this.smartData.user_capacity.bytes) / Math.pow(10, round_digits)) * Math.pow(10, round_digits);
+			features["capacity-decibyte"] = get_capacity_in_decibyte(this.smartData.user_capacity.bytes)
 		}
 
 		if (this.smartData.rotation_rate !== undefined && this.smartData.rotation_rate > 0) {
@@ -276,25 +269,23 @@ class Disk extends EventEmitter {
 			}).catch(() => {});
 		}
 
-		if (features.model !== undefined) {
-			if (features.model.includes(" SSD") || features.model.includes("SSD ")) {
-				features.model = features.model.replace(" SSD", "").replace("SSD ", "").replace("  ", " ").trim();
-				if (features.model == "") delete features.model;
-				features.type = "ssd";
-			} else if (features.model.startsWith("HGST ")) {
-				features.model = features.model.slice(5);
-				features['brand-manufacturer'] = "HGST";
-			}
+		if (features.model?.includes(" SSD") || features.model?.includes("SSD ")) {
+			features.type = "ssd";
+			features.model = features.model.replace("SSD", "").replace(/ +/g, ' ').trim(); // collapse multiple spaces
+			if (features.model === "") delete features.model;
+		} else if (features.model?.startsWith("HGST ")) {
+			features.model = features.model.slice(5);
+			features['brand-manufacturer'] = "HGST";
 		}
 
-		if (features.family !== undefined) {
+		if (features.family) {
 			if (features.family.includes("(SATA)"))
 				features.family = features.family.replace("(SATA)", "").trim();
 			else if (features.family.includes("(ATA/133 and SATA/150)"))
 				features.family = features.family.replace("(ATA/133 and SATA/150)", "").trim();
 			else if (features.family.includes("SSD")) {
 				features.type = "ssd";
-				if (["basedssds", "basedssd"].has(features.family.replace(" ", "").lower()))
+				if (["basedssds", "basedssd"].some((s) => features.family.replaceAll(" ", "").toLowerCase().includes(s)))
 					delete features.family;
 			} else if (features.family.includes("Serial ATA")) {
 				features.family = features.family.replace("Serial ATA", "").trim();
@@ -305,17 +296,19 @@ class Disk extends EventEmitter {
 
 		// Unreliable port detection as a fallback
 		if (port === undefined) {
-			if ((features.family !== undefined && (features.family.includes("SATA") || features.model.includes("SATA"))) || this.smartData.sata_version !== undefined)
+			if (features.family?.includes("SATA")
+				|| features.model?.includes("SATA")
+				|| this.smartData.sata_version !== undefined) {
 				port = "sata-ports-n";
-			else if (this.smartData.pata_version !== undefined)
+			} else if (this.smartData.pata_version !== undefined) {
 				if (["1.8", "2.5"].includes(features["hdd-form-factor"]))
 					port = "mini-ide-ports-n";
-				else port = "ide-ports-n";
-			else if (this.smartData.nvme_version !== undefined) {
+				else
+					port = "ide-ports-n";
+			} else if (this.smartData.nvme_version !== undefined) {
 				port = "m2-ports-n";
 				features.type = "ssd";
-				if (features["hdd-form-factor"] === undefined)
-					features["hdd-form-factor"] = "m2";
+				features["hdd-form-factor"] ??= "m2";
 			} else if (this.smartData.device?.type === "scsi" && this.smartData.device.protocol === "SCSI")
 				features.notes = "This is a SCSI disk, however it is not possible to detect the exact connector type. Please set the correct one manually.";
 		}
