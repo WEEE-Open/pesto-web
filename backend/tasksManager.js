@@ -38,7 +38,7 @@ export default class TasksManager extends EventEmitter {
   }
 
   /**
-   * Create a new Task and start it if no another task for the same disk
+   * Create a new Task and start it if no other task for the same disk
    * is running.
    *
    * @param {Disk} disk - Disk on which the task will be executed
@@ -53,7 +53,6 @@ export default class TasksManager extends EventEmitter {
     this.addTaskListeners(newTask);
 
     this.emit("newTask", newTask);
-    this.emit("taskListUpdated", this.listTasks());
 
     if (this.running.some((t) => t.diskName === disk.name)) {
       this.ready.push(newTask);
@@ -87,6 +86,18 @@ export default class TasksManager extends EventEmitter {
       const task = this.ready.splice(i, 1);
       this.running.push(task);
       task.start();
+    }
+  }
+
+  getTask(uuid) {
+    [...this.running, ...this.ready, ...this.done].find((t) => t.uuid === uuid);
+  }
+
+  get allTasks() {
+    return {
+      running: this.running,
+      ready: this.ready,
+      done: this.done,
     }
   }
 

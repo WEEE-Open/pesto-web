@@ -9,7 +9,7 @@ const tasksRouter = express.Router({ mergeParams: true });
  * Retrieve the list of all tasks
  */
 tasksRouter.get("/", (req, res) => {
-  res.json(tasksManager.listTasks());
+  res.json(tasksManager.allTasks());
 });
 
 /**

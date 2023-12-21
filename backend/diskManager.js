@@ -357,7 +357,8 @@ class Disk extends EventEmitter {
 	}
 
 	format() {
-		return tasksManager.startTask("Formatting " + this.name, this, [{program: 'badblocks', options: {}}]);
+		// return tasksManager.startTask("Formatting " + this.name, this, [{program: 'badblocks', options: {}}]);
+		return tasksManager.startTask(this, "badblocks", {});
 	}
 
 	toJSON() {
