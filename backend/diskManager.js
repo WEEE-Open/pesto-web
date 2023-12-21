@@ -64,43 +64,37 @@ export default class DiskManager extends EventEmitter {
 					return;
 				}
 
-				// copy disks into this set
-				let existingDisks = new Set(this.disks.map(d => d.name));
-				let listUpdated = false;
+				const existingDisks = new Set(this.disks.map((d) => d.name));
 
-				// for each disk seen by smartctl:
-				// if not in the existing disks list, add it to this.disks
-				// delete it from existing disks list
-				disksInfo.devices?.forEach(disk => {
-					if (!existingDisks.has(disk.name) && !this.opt.filter.has(disk.name)) {
-						let newDisk = new Disk(disk.name);
-						this.disks.push(newDisk);
-						newDisk.on('smartData', () => {
-							this.emit('smartData', newDisk);
-						});
-						newDisk.on('taralloCode', () => {
-							this.emit('disksListUpdated', this.listDisks());
-						});
-						this.emit('diskAdded', newDisk);
-						listUpdated = true; // something in the list has been updated
-					}
-					existingDisks.delete(disk.name); // delete the disk scanned by smartctl from existing disks list
-				});
+				const newDisks = disksInfo.devices
+          ?.filter((disk) => !existingDisks.has(disk.name) && !this.opt.filter.has(disk.name))
+          .map((diskInfo) => {
+            const newDisk = new Disk(diskInfo.name);
+            newDisk.on("smartData", () => {
+              this.emit("smartData", newDisk);
+            });
+            newDisk.on("taralloCode", () => {
+              this.emit("disksListUpdated", this.listDisks());
+            });
+            this.emit("diskAdded", newDisk);
+						return newDisk;
+          }) || [];
 
-				// now existing disks contains only old disks (not seen by smartctl anymore)
-				existingDisks.forEach(disk => {
-					// find the corresponding index of the disk in the disks list
-					let i = this.disks.findIndex(d => d.name === disk);
-					// extract the corresponding disk from disks list and remove all listeners from it
-					let [old] = this.disks.splice(i, 1);
-					old.removeAllListeners();
-					this.emit('diskRemoved', old);
-					listUpdated = true;
-				});
+				const removedDisks = this.disks
+					.filter(disk => !disksInfo.devices?.some((d) => d.name === disk.name))
+					.map(disk => {
+							disk.removeAllListeners();
+							this.emit('diskRemoved', disk);
+							return disk.name;
+					});
+
+				if (newDisks.length > 0 || removedDisks.length > 0) {
+					this.disks = this.disks.filter((d) => !removedDisks.includes(d.name));
+					this.disks = [...this.disks, ...newDisks];
+					this.emit('disksListUpdated', this.listDisks());
+				}
 
 				this.refreshingList = false;
-				// console.log(this.listDisks());
-				if (listUpdated) this.emit('disksListUpdated', this.listDisks());
 				this.emit('disksListUpdateFinish', this.listDisks());
 				resolve(this.listDisks());
 			});
@@ -282,8 +276,8 @@ class Disk extends EventEmitter {
       features.type = "ssd";
       features.model = features.model
         .replace("SSD", "")
-        .replace(/ +/g, " ")
-        .trim(); // collapse multiple spaces
+        .replace(/ +/g, " ") // collapse multiple spaces
+        .trim();
       if (features.model === "") delete features.model;
     } else if (features.model?.startsWith("HGST ")) {
 			features.model = features.model.slice(5);
