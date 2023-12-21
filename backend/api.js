@@ -1,5 +1,3 @@
-import config from "./config.js";
-
 import express from "express";
 import { tarallo } from "./index.js";
 import sseRouter from "./routes/sse.router.js";

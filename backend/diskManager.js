@@ -237,29 +237,35 @@ class Disk extends EventEmitter {
 			features.sn = this.smartData.serial_number.slice(3);
 
 		if (this.smartData.wwn)
-			features.wwn = (this.smartData.wwn.naa || "") + (this.smartData.wwn.oui || "") + (this.smartData.wwn.id || "");
+			features.wwn =
+        (this.smartData.wwn.naa || "") +
+        (this.smartData.wwn.oui || "") +
+        (this.smartData.wwn.id || "");
 
 		switch (this.smartData.form_factor?.name) {
 			case '3.5 inches':
 			case '2.5 inches':
 			case '1.8 inches':
 				features["hdd-form-factor"] = this.smartData.form_factor.name.split(" ")[0];
-			break;
+			  break;
 			case 'M.2':
 				features["hdd-form-factor"] = "m2";
 				port = "m2-ports-n";
-			break;
+			  break;
 			case 'mSATA':
 				features["hdd-form-factor"] = "msata";
 				port = "msata-ports-n";
-			break;
+			  break;
 		}
 
 		if (this.smartData.user_capacity?.bytes !== undefined) {
 			features["capacity-decibyte"] = get_capacity_in_decibyte(this.smartData.user_capacity.bytes)
 		}
 
-		if (this.smartData.rotation_rate !== undefined && this.smartData.rotation_rate > 0) {
+		if (
+      this.smartData.rotation_rate !== undefined &&
+      this.smartData.rotation_rate > 0
+    ) {
 			features["spin-rate-rpm"] = this.smartData.rotation_rate;
 		} else {
 			await this.checkIfHDD().then((isHDD) => {
@@ -269,36 +275,46 @@ class Disk extends EventEmitter {
 			}).catch(() => {});
 		}
 
-		if (features.model?.includes(" SSD") || features.model?.includes("SSD ")) {
-			features.type = "ssd";
-			features.model = features.model.replace("SSD", "").replace(/ +/g, ' ').trim(); // collapse multiple spaces
-			if (features.model === "") delete features.model;
-		} else if (features.model?.startsWith("HGST ")) {
+		if (
+      features.model?.includes(" SSD") ||
+      features.model?.includes("SSD ")
+    ) {
+      features.type = "ssd";
+      features.model = features.model
+        .replace("SSD", "")
+        .replace(/ +/g, " ")
+        .trim(); // collapse multiple spaces
+      if (features.model === "") delete features.model;
+    } else if (features.model?.startsWith("HGST ")) {
 			features.model = features.model.slice(5);
 			features['brand-manufacturer'] = "HGST";
 		}
 
 		if (features.family) {
-			if (features.family.includes("(SATA)"))
-				features.family = features.family.replace("(SATA)", "").trim();
-			else if (features.family.includes("(ATA/133 and SATA/150)"))
-				features.family = features.family.replace("(ATA/133 and SATA/150)", "").trim();
-			else if (features.family.includes("SSD")) {
-				features.type = "ssd";
-				if (["basedssds", "basedssd"].some((s) => features.family.replaceAll(" ", "").toLowerCase().includes(s)))
-					delete features.family;
-			} else if (features.family.includes("Serial ATA")) {
-				features.family = features.family.replace("Serial ATA", "").trim();
-				if (port === undefined)
-					port = "sata-ports-n"
-			}
-		}
+      if (features.family.includes("(SATA)")) {
+        features.family = features.family.replace("(SATA)", "").trim();
+      } else if (features.family.includes("(ATA/133 and SATA/150)")) {
+        features.family = features.family
+          .replace("(ATA/133 and SATA/150)", "")
+          .trim();
+      } else if (features.family.includes("SSD")) {
+        features.type = "ssd";
+        if (["basedssds", "basedssd"].some((s) =>
+            features.family.replaceAll(" ", "").toLowerCase().includes(s)))
+          delete features.family;
+      } else if (features.family.includes("Serial ATA")) {
+        features.family = features.family.replace("Serial ATA", "").trim();
+        port ??= "sata-ports-n";
+      }
+    }
 
 		// Unreliable port detection as a fallback
 		if (port === undefined) {
-			if (features.family?.includes("SATA")
-				|| features.model?.includes("SATA")
-				|| this.smartData.sata_version !== undefined) {
+			if (
+        features.family?.includes("SATA") ||
+				features.model?.includes("SATA") ||
+				this.smartData.sata_version !== undefined
+      ) {
 				port = "sata-ports-n";
 			} else if (this.smartData.pata_version !== undefined) {
 				if (["1.8", "2.5"].includes(features["hdd-form-factor"]))
@@ -309,8 +325,12 @@ class Disk extends EventEmitter {
 				port = "m2-ports-n";
 				features.type = "ssd";
 				features["hdd-form-factor"] ??= "m2";
-			} else if (this.smartData.device?.type === "scsi" && this.smartData.device.protocol === "SCSI")
+			} else if (
+        this.smartData.device?.type === "scsi" &&
+        this.smartData.device.protocol === "SCSI"
+      ) {
 				features.notes = "This is a SCSI disk, however it is not possible to detect the exact connector type. Please set the correct one manually.";
+      }
 		}
 
 		if (port !== undefined) {
