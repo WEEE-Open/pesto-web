@@ -3,7 +3,12 @@ import { diskManager, tasksManager, tarallo } from "./index.js";
 
 const sse = new SSE({ disks: [], tasks: [], tarallo: { available: false } });
 
-function init() {
+/**
+ * Initialize sse object: setup listeners on disk manager, task manager and other emitters
+ * to send objects on those events.
+ * Call this function before running the server.
+ */
+function initSSE() {
   // TODO: actually a decent method that build the complete object and compares changes, this is very hacky
   function sendUpdatedDiskList() {
     let disksList = diskManager.listDisks();
@@ -76,4 +81,4 @@ function init() {
   });
 }
 
-export { sse, init };
+export { sse, initSSE };

@@ -23,7 +23,7 @@ const argv = yargs(process.argv)
   .alias('help', 'h').argv;
 
 import api from './api.js';
-import { init } from './sse.js';
+import { initSSE } from './sse.js';
 import DiskManager from './diskManager.js';
 import TasksManager from './tasksManager.js';
 import Tarallo from './tarallo.js';
@@ -50,7 +50,7 @@ app.use(function (req, res, next) {
 	next();
 });
 
-init();
+initSSE();
 
 app.use('/api/v1/', api);
 
