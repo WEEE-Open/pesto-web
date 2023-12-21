@@ -6,95 +6,167 @@ import { calcRemainingTime } from "./utils.js";
 export default class TasksManager extends EventEmitter {
   constructor() {
     super();
-    this.tasks = [];
+    this.ready = [];
+    this.running = [];
+    this.done = [];
   }
 
-  startTask(name, disk, steps) {
-    const newTask = new Task(name, disk, steps);
+  /**
+   * Add listeners to task object.
+   * Call this function after creating a new task object.
+   *
+   * @param {Task} task - Task object to which the listeners should be added
+   */
+  addTaskListeners(task) {
+    task.on("started", () => {
+      this.emit("taskStarted", task);
+    })
 
-    newTask.on("progressUpdate", () => {
-      this.emit("taskProgressUpdate", newTask);
+    task.on("progressUpdate", () => {
+      this.emit("taskProgressUpdate", task);
     });
 
-    newTask.on("error", (err) => {
-      this.emit("taskError", err, newTask);
+    task.on("error", (err) => {
+      this.emit("taskError", err, task);
     });
 
-    newTask.on("nextStep", () => {
-      this.emit("taskNextStep", newTask);
+    task.on("done", () => {
+      this.taskDone(task);
+      this.runNext(task.diskName);
+      this.emit("taskCompleted", task);
     });
+  }
 
-    newTask.on("done", () => {
-      this.emit("taskCompleted", newTask);
-    });
+  /**
+   * Create a new Task and start it if no another task for the same disk
+   * is running.
+   *
+   * @param {Disk} disk - Disk on which the task will be executed
+   * @param {String} program - Name of the program to execute
+   * @param {Object} options - Options for the execution of the program
+   *
+   * @returns {Number} uuid of the new task
+   */
+  startTask(disk, program, options) {
+    const newTask = new Task(disk, program, options);
+
+    this.addTaskListeners(newTask);
 
     this.emit("newTask", newTask);
     this.emit("taskListUpdated", this.listTasks());
 
-    this.tasks.push(newTask);
+    if (this.running.some((t) => t.diskName === disk.name)) {
+      this.ready.push(newTask);
+    } else {
+      this.running.push(newTask);
+      newTask.start();
+    }
 
     return newTask.uuid;
   }
 
-  clearTasks() {
-    this.tasks = this.tasks.filter((t) => {
-      if (t.completed) {
-        t.removeAllListeners();
-        return false;
-      }
-      return true;
-    });
-
-    this.emit("taskListUpdated", this.listTasks());
+  /**
+   * Move a completed task from running to done list.
+   *
+   * @param {Task} task
+   */
+  taskDone(task) {
+    this.running = this.running.filter((t) => t.uuid !== task.uuid)
+    this.done.push(task);
   }
 
-  getTaskIndex(task) {
-    if (!(task instanceof Task)) {
-      console.error("ERROR: trying to get task index of a non Task object");
-      return -1;
+  /**
+   * Run next task in queue for a specific disk.
+   * If no task is in queue, nothing happens.
+   *
+   * @param {String} diskName
+   */
+  runNext(diskName) {
+    const i = this.ready.findIndex((t) => t.diskName === diskName);
+    if (i !== -1) {
+      const task = this.ready.splice(i, 1);
+      this.running.push(task);
+      task.start();
     }
-
-    return this.tasks.findIndex((t) => t.uuid === task.uuid);
   }
 
-  getTask(task) {
-    let index = this.getTaskIndex(task);
-    return index >= 0 ? this.tasks[index] : undefined;
+  get runningTasks() {
+    return this.running;
   }
 
-  listTasks() {
-    return this.tasks;
+  get readyTasks() {
+    return this.ready;
+  }
+
+  get doneTasks() {
+    return this.done;
   }
 }
 
 class Task extends EventEmitter {
-  constructor(name, disk, steps) {
+  /**
+   * Create a new Task.
+   *
+   * @param {Disk} disk - Disk on which the task will be executed
+   * @param {String} program - Name of the program to execute
+   * @param {Object} options - Options for the execution of the program
+   */
+  constructor(disk, program, options) {
     super();
-    this.name = name;
-    this.disk = disk;
     this.uuid = uuid();
-    this.steps = steps; // list of steps (or sub-tasks) of this task
+    this.disk = disk;
+    this.program = program;
+    this.options = options;
     this.progress = 0;
-    this.currentStep = -1;
     this.completed = false;
     this.eta = undefined;
-    this.startTime = Date.now();
+    this.startTime = undefined;
+    this.endTime = undefined;
     this.lastProgressUpdates = [];
-
-    this.disk.busy = true;
-    this.done();
-  }
-
-  get totalSteps() {
-    return this.steps.length;
   }
 
   /**
+   * Starts executing the task program.
+   * Emits an "error" event if the program name is not supported.
+   */
+  start() {
+    /* // TODO: maybe use a strategy pattern or something like that.
+     * the idea is that I want to have a sort of "Program" entity, which
+     * starts a process from a command (e.g. badblocks) and
+     * can call done(), updateProgress(), error() to update the task status.
+     */
+    if (program === "badblocks") {
+      this.badblocks(this.options);
+    } else {
+      error(`Can't find program ${program}`);
+      return;
+    }
+
+    this.disk.busy = true;
+    this.startTime = Date.now();
+    this.emit("started", this);
+  }
+
+  /**
+   * Mark the Task as completed, free the disk and notify the task managar.
+   */
+  done() {
+    this.endTime = Date.now();
+    this.progress = 100;
+    this.completed = true;
+    this.eta = 0;
+    this.disk.busy = false;
+    this.emit("done", this);
+  }
+
+  /**
+   * Updates the progress percentage and the eta value.
    *
    * @param {number} percentage from 0 to 100
    * @param {number} [eta] number in seconds till completion (optional)
    */
   updateProgress(percentage, eta) {
+    // TODO: this function takes "eta" as a parameter but then completely ignores it; change it
     if (percentage <= this.progress) {
       // update only the eta value in this case
       this.eta = eta ?? this.eta;
@@ -119,40 +191,33 @@ class Task extends EventEmitter {
     this.emit("progressUpdate", this);
   }
 
+  /**
+   * Notify the task manager that an error occurred in the task.
+   *
+   * @param {*} err
+   */
   error(err) {
     console.log(`TaskManager: error! ${err}`);
     this.emit("error", err);
     this.completed = false;
   }
 
-  done() {
-    this.currentStep++;
-    if (this.currentStep === this.steps.length) {
-      this.disk.busy = false;
-      this.emit("done", this);
-      return;
-    }
-    this.progress = 0;
-    this.lastProgressUpdates = [];
-    this.emit("nextStep", this);
-    switch (this.steps[this.currentStep].program) {
-      case "badblocks":
-        this.badblocks(this.steps[this.currentStep].options);
-        break;
-      default:
-        error(`Can't find program ${this.steps[this.currentStep].program}`);
-    }
-  }
-
+  /**
+   * Get JSON object to represent the task.
+   *
+   * @returns {Object}
+   */
   toJSON() {
     return {
-      name: this.name,
-      progress: this.progress,
-      step: this.currentStep,
-      totalSteps: this.totalSteps,
+      uuid: this.uuid,
+      diskName: this.disk.name,
+      program: this.program,
+      options: this.options,
       completed: this.completed,
+      progress: this.progress,
       eta: this.eta,
       startTime: this.startTime,
+      endTime: this.endTime
     };
   }
 
@@ -160,8 +225,6 @@ class Task extends EventEmitter {
 
   badblocks(opt) {
     let checking = false;
-
-    console.log(this);
 
     const badblocks = spawn("badblocks", [
       "-w",
