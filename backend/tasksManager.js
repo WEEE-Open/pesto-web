@@ -2,6 +2,7 @@ import { EventEmitter } from "events";
 import { v4 as uuid } from "uuid";
 import { spawn } from "child_process";
 import { calcRemainingTime } from "./utils.js";
+import { diskManager } from "./index.js";
 
 export default class TasksManager extends EventEmitter {
   constructor() {
@@ -20,7 +21,7 @@ export default class TasksManager extends EventEmitter {
   addTaskListeners(task) {
     task.on("started", () => {
       this.emit("taskStarted", task);
-    })
+    });
 
     task.on("progressUpdate", () => {
       this.emit("taskProgressUpdate", task);
@@ -38,6 +39,35 @@ export default class TasksManager extends EventEmitter {
   }
 
   /**
+   *
+   * @param {*} tasks - array of objects with fields:
+   *  {
+   *    {Disk} disk - Disk on which the task will be executed
+   *    {String} program - Name of the program to execute
+   *    {Object} options - Options for the execution of the program
+   *  }
+   */
+  newTaskChain(tasks) {
+    if (!tasks?.length) return undefined;
+
+    const taskChainId = uuid();
+    const tasks = [];
+
+    tasks.forEach((t, pos) => {
+      const taskId = this.startTask(
+        t.disk,
+        t.program,
+        t.options,
+        taskChainId,
+        pos
+      );
+      tasks.push({ uuid: taskId, pos: pos });
+    });
+
+    return { taskChainId: taskChainId, tasks: tasks };
+  }
+
+  /**
    * Create a new Task and start it if no other task for the same disk
    * is running.
    *
@@ -47,8 +77,8 @@ export default class TasksManager extends EventEmitter {
    *
    * @returns {Number} uuid of the new task
    */
-  startTask(disk, program, options) {
-    const newTask = new Task(disk, program, options);
+  startTask(disk, program, options, taskChainId, taskChainPos) {
+    const newTask = new Task(disk, program, options, taskChainId, taskChainPos);
 
     this.addTaskListeners(newTask);
 
@@ -70,7 +100,7 @@ export default class TasksManager extends EventEmitter {
    * @param {Task} task
    */
   taskDone(task) {
-    this.running = this.running.filter((t) => t.uuid !== task.uuid)
+    this.running = this.running.filter((t) => t.uuid !== task.uuid);
     this.done.push(task);
   }
 
@@ -81,6 +111,8 @@ export default class TasksManager extends EventEmitter {
    * @param {String} diskName
    */
   runNext(diskName) {
+    if (!diskManager.getDisk(diskName)) return;
+
     const i = this.ready.findIndex((t) => t.diskName === diskName);
     if (i !== -1) {
       const task = this.ready.splice(i, 1);
@@ -98,7 +130,7 @@ export default class TasksManager extends EventEmitter {
       running: this.running,
       ready: this.ready,
       done: this.done,
-    }
+    };
   }
 
   get runningTasks() {
@@ -122,7 +154,7 @@ class Task extends EventEmitter {
    * @param {String} program - Name of the program to execute
    * @param {Object} options - Options for the execution of the program
    */
-  constructor(disk, program, options) {
+  constructor(disk, program, options, taskChainId, taskChainPos) {
     super();
     this.uuid = uuid();
     this.disk = disk;
@@ -131,9 +163,12 @@ class Task extends EventEmitter {
     this.progress = 0;
     this.completed = false;
     this.eta = undefined;
+    this.addedTime = new Date();
     this.startTime = undefined;
     this.endTime = undefined;
     this.lastProgressUpdates = [];
+    this.taskChainId = taskChainId;
+    this.taskChainPos = taskChainPos;
   }
 
   /**
@@ -228,7 +263,10 @@ class Task extends EventEmitter {
       progress: this.progress,
       eta: this.eta,
       startTime: this.startTime,
-      endTime: this.endTime
+      endTime: this.endTime,
+      addedTime: this.addedTime,
+      taskChainId: this.taskChainId,
+      taskChainPos: this.taskChainPos,
     };
   }
 

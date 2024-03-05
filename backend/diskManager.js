@@ -365,7 +365,7 @@ class Disk extends EventEmitter {
 		return {
 			name: this.name,
 			size: this.size,
-			busy: this.busy,
+			busy: this.busy, // TODO: return true if task in progress for this disk
 			code: this.itemCode,
 			icon: this.parsedSmartCtlData?.type,
 			taralloProperties: this.taralloProperties,
