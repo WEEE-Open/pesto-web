@@ -67,6 +67,14 @@ export default class TasksManager extends EventEmitter {
     return { taskChainId: taskChainId, tasks: tasks };
   }
 
+  getTaskChain(taskChainId) {
+    const tasks = this.allTasks()
+      .filter((t) => t.taskChainId === taskChainId)
+      .sort((a, b) => a.taskChainPos - b.taskChainPos);
+
+    return tasks;
+  }
+
   /**
    * Create a new Task and start it if no other task for the same disk
    * is running.
@@ -126,6 +134,16 @@ export default class TasksManager extends EventEmitter {
   }
 
   get allTasks() {
+    const list = [];
+
+    this.running.map((t) => list.push({ ...t, status: "running" }));
+    this.ready.map((t) => list.push({ ...t, status: "ready" }));
+    this.done.map((t) => list.push({ ...t, status: "done" }));
+
+    return list;
+  }
+
+  get taskLists() {
     return {
       running: this.running,
       ready: this.ready,
