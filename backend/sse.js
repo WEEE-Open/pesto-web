@@ -21,7 +21,7 @@ function initSSE() {
   diskManager.on("smartData", sendUpdatedDiskList);
 
   function sendUpdatedTasksList() {
-    let tasksList = tasksManager.listTasks();
+    let tasksList = tasksManager.allTasks;
     sse.initial[0].tasks = tasksList;
     sse.send([{ op: "replace", path: "/tasks", value: tasksList }]);
   }

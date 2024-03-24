@@ -46,6 +46,9 @@ export default class TasksManager extends EventEmitter {
    *    {String} program - Name of the program to execute
    *    {Object} options - Options for the execution of the program
    *  }
+   *
+   * The order of tasks in the array determines the order of execution
+   * of the tasks in the task chain.
    */
   newTaskChain(tasks) {
     if (!tasks?.length) return undefined;
@@ -143,7 +146,7 @@ export default class TasksManager extends EventEmitter {
     return list;
   }
 
-  get taskLists() {
+  get taskQueues() {
     return {
       running: this.running,
       ready: this.ready,
@@ -161,6 +164,20 @@ export default class TasksManager extends EventEmitter {
 
   get doneTasks() {
     return this.done;
+  }
+
+  get taskChains() {
+    const taskChainsMap = this.allTasks.reduce((map, task) => {
+      const taskChainId = task.taskChainId;
+      if (!map.has(taskChainId)) {
+        map.set(taskChainId, { taskChainId, tasks: [task] });
+      } else {
+        map.get(taskChainId).tasks.push(task);
+      }
+      return map;
+    }, new Map());
+
+    return Object.values(taskChainsMap);
   }
 }
 

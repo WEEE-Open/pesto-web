@@ -4,15 +4,6 @@ import { tasksManager } from "../index.js";
 const tasksRouter = express.Router({ mergeParams: true });
 
 /**
- * GET /tasks
- *
- * Retrieve the list of all tasks
- */
-tasksRouter.get("/", (req, res) => {
-  res.json(tasksManager.allTasks());
-});
-
-/**
  * Middleware to get specific task info and put it into request object.
  * The request should contain a parameter "uuid", used as identifier
  * of the task.
@@ -26,6 +17,43 @@ const embedTaskIntoRequest = (req, res, next) => {
   req.task = task;
   next();
 };
+
+/**
+ * GET /tasks
+ *
+ * Retrieve the list of all tasks
+ */
+tasksRouter.get("/", (req, res) => {
+  res.json(tasksManager.allTasks);
+});
+
+/**
+ * GET /tasks/chains/:uuid
+ *
+ * Retrieve the info for a specific task chain identified by its "uuid".
+ */
+tasksRouter.get("/chains/:uuid", (req, res) => {
+  res.json(tasksManager.getTaskChain(uuid));
+});
+
+/**
+ * POST /tasks/chains
+ *
+ * Add a new task chain.
+ */
+tasksRouter.post("/chains", (req, res) => {
+  // TODO: validate array of tasks
+  res.json(tasksManager.newTaskChain(req.body.tasks));
+});
+
+/**
+ * GET /tasks/chains
+ *
+ * Retrieve all the tasks grouped by their task chain id
+ */
+tasksRouter.get("/chains", (req, res) => {
+  res.json(tasksManager.taskChains);
+});
 
 /**
  * Use middleware to embed disk info for every route accessing

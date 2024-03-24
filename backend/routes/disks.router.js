@@ -131,7 +131,7 @@ disksRouter.get("/:name/executeProcess/:process", (req, res) => {
       taskId = req.disk.format();
       break;
     default:
-      res.status(404).send({ error: "Process not found" });
+      res.status(400).send({ error: "The specified process is not supported" });
       return;
   }
 
