@@ -1,0 +1,231 @@
+openapi: 3.0.3
+info:
+  title: PESTO-WEB
+  description: |-
+    This is the API for the new version of PESTO: PESTO-WEB!
+    Here you can find the API endpoints available.
+    
+    WATCH OUT: pesto-web backend is in development yet, so something could change and this documentation could become outdated. If you encounter any problem, please open an issue on the official github repository which you can find following the link below.
+    
+    Official pesto-web repository:
+    - [WEEE-Open/pesto-web](https://github.com/WEEE-Open/pesto-web)
+    - [The source API definition for pesto-web](https://github.com/WEEE-Open/pesto-web/blob/master/backend/docs/openapi.yaml)
+  contact:
+    name: WEEE Open
+    url: https://weeeopen.polito.it/
+  license:
+    name: MIT License
+    url: https://opensource.org/license/mit
+  version: 1.0.0
+servers:
+  - url: https://localhost:3000/api/v1
+tags:
+  - name: disks
+    description: Endpoints for disk management
+  - name: tasks
+    description: Endpoints for task management
+  - name: files
+    description: Endpoints for file management
+paths:
+  /disks:
+    get:
+      tags:
+        - disks
+      summary: Get all disks
+      description: Retrieve the list of all connected disks
+      operationId: getDisks
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Disk'
+        '500':
+          description: Internal server error
+  /disks/refresh:
+    get:
+      tags:
+        - disks
+      summary: Refresh list (WARNING - This endpoint could be removed or changed in the near future)
+      description: Refresh the list of all connected disks
+      operationId: refreshDisks
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Disk'
+        '500':
+          description: Internal server error
+  /disks/{name}:
+    get:
+      tags:
+        - disks
+      summary: Get disk by name
+      description: Retrieves info about a connected disk
+      operationId: getDisk
+      parameters:
+        - name: name
+          in: path
+          description: Name of the disk
+          required: true
+          schema:
+            type: string
+            example: /dev/sda
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Disk'
+        '404':
+          description: Disk not found
+        '500':
+          description: Internal server error
+  /disks/{name}/refreshsmartdata:
+    get:
+      tags:
+        - disks
+      summary: Refresh smart data
+      description: Refreshes smart data of a connected disk
+      operationId: refreshSmartData
+      parameters:
+        - name: name
+          in: path
+          description: Name of the disk
+          required: true
+          schema:
+            type: string
+            example: /dev/sda
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+        '404':
+          description: Disk not found
+        '500':
+          description: Internal server error
+  /disks/{name}/tarallo:
+    get:
+      tags:
+        - disks
+      summary: Get tarallo properties
+      description: Gets info about a connected disk from Tarallo inventory system
+      operationId: getTaralloProps
+      parameters:
+        - name: name
+          in: path
+          description: Name of the disk
+          required: true
+          schema:
+            type: string
+            example: /dev/sda
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+        '404':
+          description: Disk not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Disk not found on Tarallo"
+        '500':
+          description: Internal server error
+  /disks/{name}/executeprocess/{process}:
+    get:
+      tags:
+        - disks
+      summary: Start process on disk
+      description: Executes a process on a connected disk
+      operationId: execProcess
+      parameters:
+        - name: name
+          in: path
+          description: Name of the disk
+          required: true
+          schema:
+            type: string
+            example: /dev/sda
+        - name: process
+          in: path
+          description: Name of the process
+          required: true
+          schema:
+            type: string
+            example: format
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uuid:
+                    type: string
+                    description: id of the task that has been created
+                    example: abc12345-def67890
+        '400':
+          description: Process not supported
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: The specified process is not supported
+        '404':
+          description: Disk not found
+        '500':
+          description: Internal server error
+components:
+  schemas:
+    Disk:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "/dev/sda"
+        nameShort:
+          type: string
+          example: "sda"
+        busy:
+          type: boolean
+          example: false
+        size:
+          type: string
+          example: "500 GB"
+        itemCode:
+          type: string
+          example: "A0001"
+        taralloProperties:
+          type: object
+          example: {}
+        smartData:
+          type: object
+          example: {}
+        parsedSmartCtlData:
+          type: object
+          example: {}
+        isLoadingSmartData:
+          type: boolean
+          example: false
