@@ -1,8 +1,10 @@
 import { EventEmitter } from "events";
 import { v4 as uuid } from "uuid";
-import { spawn } from "child_process";
 import { calcRemainingTime } from "./utils.js";
 import { diskManager } from "./index.js";
+import Badblocks from "./commands/badblocks.js";
+import WGet from "./commands/wget.js";
+import Command from "./commands.js";
 
 export default class TasksManager extends EventEmitter {
   constructor() {
@@ -54,7 +56,7 @@ export default class TasksManager extends EventEmitter {
     if (!tasks?.length) return undefined;
 
     const taskChainId = uuid();
-    const tasks = [];
+    const tasksList = [];
 
     tasks.forEach((t, pos) => {
       const taskId = this.startTask(
@@ -64,10 +66,10 @@ export default class TasksManager extends EventEmitter {
         taskChainId,
         pos
       );
-      tasks.push({ uuid: taskId, pos: pos });
+      tasksList.push({ uuid: taskId, pos: pos });
     });
 
-    return { taskChainId: taskChainId, tasks: tasks };
+    return { taskChainId: taskChainId, tasks: tasksList };
   }
 
   getTaskChain(taskChainId) {
@@ -85,10 +87,26 @@ export default class TasksManager extends EventEmitter {
    * @param {Disk} disk - Disk on which the task will be executed
    * @param {String} program - Name of the program to execute
    * @param {Object} options - Options for the execution of the program
+   * @param {String} [taskChainId] - Identifier of the task chain to which the task belongs.
+   * If not specified, a new task chain with only this task is created.
+   * @param {Number} [taskChainPos] - Position of the task in the task chain execution order.
+   * If not specified and taskChainId is specified, the position will automatically be assigned to be the last in the task chain.
+   * If not specified and also taskChainId is not specified, the position will be the first.
+   * If specified and taskChainId is not, then the position passed as a parameter will be ignored and the position will be assigned
+   * following the previous two criteria.
    *
    * @returns {Number} uuid of the new task
    */
   startTask(disk, program, options, taskChainId, taskChainPos) {
+    if (!taskChainId) {
+      taskChainId = uuid();
+      taskChainPos = 0;
+    }
+
+    if (taskChainPos === undefined) {
+      taskChainPos = this.getTaskChain(taskChainId).length;
+    }
+
     const newTask = new Task(disk, program, options, taskChainId, taskChainPos);
 
     this.addTaskListeners(newTask);
@@ -180,7 +198,18 @@ export default class TasksManager extends EventEmitter {
     return Object.values(taskChainsMap);
   }
 }
-
+/**
+ * Task class
+ *
+ * @description A task represents an encapsulation for a program execution,
+ * managing its start, progress and termination. Each task can be part of a
+ * chain of tasks, in which each one has a position that determines the order
+ * of execution.
+ * @emits "started" : when the actual process starts
+ * @emits "progressUpdate" : when a new update of the process progress is available
+ * @emits "done" : when the process ends without errors
+ * @emits "error" : when there is an error in the process
+ */
 class Task extends EventEmitter {
   /**
    * Create a new Task.
@@ -195,6 +224,7 @@ class Task extends EventEmitter {
     this.disk = disk;
     this.program = program;
     this.options = options;
+    this.command = undefined;
     this.progress = 0;
     this.completed = false;
     this.eta = undefined;
@@ -207,19 +237,41 @@ class Task extends EventEmitter {
   }
 
   /**
+   * Add listeners to Command object.
+   * Call this function after creating a new command object.
+   *
+   * @param {Command} command - Command object to which the listeners should be added
+   */
+  addCommandListeners(command) {
+    command.on("update", (percentage) => {
+      this.updateProgress(percentage);
+    });
+
+    command.on("error", (err) => {
+      this.error(err);
+    });
+
+    command.on("done", () => {
+      this.done();
+    });
+  }
+
+  /**
    * Starts executing the task program.
    * Emits an "error" event if the program name is not supported.
    */
   start() {
-    /* // TODO: maybe use a strategy pattern or something like that.
-     * the idea is that I want to have a sort of "Program" entity, which
+    /**
+     * The idea is that I want to have a sort of "Program" entity, which
      * starts a process from a command (e.g. badblocks) and
-     * can call done(), updateProgress(), error() to update the task status.
+     * can emit "done", "update", "error" to give updates to the task entity.
      */
-    if (program === "badblocks") {
-      this.badblocks(this.options);
+    if (this.program === "badblocks") {
+      this.command = new Badblocks(this.disk.name);
+    } else if (this.program === "wget") {
+      this.command = new WGet("https://ash-speed.hetzner.com/100MB.bin");
     } else {
-      error(`Can't find program ${program}`);
+      this.error(`Can't find program ${program}`);
       return;
     }
 
@@ -229,7 +281,7 @@ class Task extends EventEmitter {
   }
 
   /**
-   * Mark the Task as completed, free the disk and notify the task managar.
+   * Mark the Task as completed, free the disk and notify the task manager.
    */
   done() {
     this.endTime = Date.now();
@@ -303,53 +355,5 @@ class Task extends EventEmitter {
       taskChainId: this.taskChainId,
       taskChainPos: this.taskChainPos,
     };
-  }
-
-  // All the actual programs
-
-  badblocks(opt) {
-    let checking = false;
-
-    const badblocks = spawn("badblocks", [
-      "-w",
-      "-s",
-      "-p",
-      "0",
-      "-t",
-      "0x00",
-      "-b",
-      "4096",
-      this.disk.name,
-    ]);
-
-    badblocks.stdout.on("data", (data) => {
-      if (!checking && data.includes("Reading and comparing")) checking = true;
-      let match = data.match(/(\d+)%/);
-      if (match.length !== 0) {
-        this.updateProgress(Number(match[1]) / 2 + 50 * checking);
-      }
-    });
-
-    badblocks.stderr.on("data", (data) => {
-      data = String(data);
-      if (!checking && data.includes("Reading and comparing")) checking = true;
-      let match = data.match(/(\d+)%/);
-      if (match.length !== 0) {
-        this.updateProgress(Number(match[1]) / 2 + 50 * checking);
-      }
-    });
-
-    /*badblocks.stderr.on('data', (data) => {
-			this.error(`Badblocks error: ${data}`);
-			//badblocks.kill();
-		});*/
-
-    badblocks.on("close", (code) => {
-      if (code !== 0) {
-        this.error(`Badblocks exited with code ${code}`);
-      } else {
-        this.done();
-      }
-    });
   }
 }

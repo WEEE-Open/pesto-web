@@ -227,3 +227,8 @@ export function calcRemainingTime(progress, lastProgresses) {
 
 	return remainingTime;
 }
+
+export function parsePercentage(data) {
+  const match = data.match(/(\d+)%/);
+  return match ? parseInt(match[1]) : null;
+}
